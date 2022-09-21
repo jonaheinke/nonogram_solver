@@ -7,9 +7,7 @@
 ![example count](https://img.shields.io/github/directory-file-count/jonaheinke/nonogram_solver/example_files?label=example%20files&type=file&extension=csv)
 ![used libraries](https://img.shields.io/badge/used%20libraries-numpy-013243)
 
----
-
-This Python project is a **puzzle solver** for the popular japanese **Nonograms**. They are also known as Hanjie, Paint by Numbers, Picross, Griddlers and Pic-a-Pix.
+This Python project is a **puzzle solver** for the popular japanese **Nonograms**. They are also known as Hanjie, Paint by Numbers, Picross, Griddlers and Pic-a-Pix. I recommend reading the corresponding [Wikipedia article on Nonograms](https://en.wikipedia.org/wiki/Nonogram).
 
 It is superior to other nonogram solvers because it can solve way more nonograms. In perticular those, in which you have to make an assumption and prove or disprove it. No other nonogram solver to my knowledge can solve those.
 
@@ -28,15 +26,15 @@ $ python nonogram_solver.py example_files/example1.csv
 
 You should write the row and column numbers into a [CSV file](https://en.wikipedia.org/wiki/Comma-separated_values) delimited by `","`, `";"` or `"|"`.
 
-first the column numbers
+First you write the column numbers.
 
 It is followed by a seperator line which contains at least one character that is not a number, space, tab or allowed delimiter.
 
-last the row numbers
+Last you write the row numbers.
 
 You can leave unused cells out or empty or use spaces so it looks more nice.
 
-Call the program with the path to the CSV file.
+Call the program with the path to the [CSV file](https://en.wikipedia.org/wiki/Comma-separated_values) described under Commandline Usage.
 
 ## Used strategies
 
