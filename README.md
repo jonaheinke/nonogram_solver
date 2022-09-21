@@ -7,9 +7,9 @@
 ![example count](https://img.shields.io/github/directory-file-count/jonaheinke/nonogram_solver/example_files?label=example%20files&type=file&extension=csv)
 ![used libraries](https://img.shields.io/badge/used%20libraries-numpy-013243)
 
-This Python project is a **puzzle solver** for the popular japanese **Nonograms**. They are also known as Hanjie, Paint by Numbers, Picross, Griddlers and Pic-a-Pix. I recommend reading the corresponding [Wikipedia article on Nonograms](https://en.wikipedia.org/wiki/Nonogram).
+This Python project is a **puzzle solver** for the popular japanese **Nonograms**. They are also known as Hanjie, Paint by Numbers, Picross, Griddlers and Pic-a-Pix. I recommend reading the corresponding [Wikipedia article on Nonograms](https://en.wikipedia.org/wiki/Nonogram). It explains very well how to solve them by hand.
 
-It is superior to other nonogram solvers because it can solve way more nonograms. In perticular those, in which you have to make an assumption and prove or disprove it. No other nonogram solver to my knowledge can solve those.
+This program is superior to other nonogram solvers because it can solve way more nonograms. In perticular those, in which you have to make an assumption and prove or disprove it. No other nonogram solver to my knowledge can solve those.
 
 There are plenty of examples in the `example_files` folder, hand-solved solutions and their transcriptions. Some of them are marked `hard` which cannot be solved with traditional methods.
 
@@ -32,7 +32,7 @@ It is followed by a seperator line which contains at least one character that is
 
 Last you write the row numbers.
 
-You can leave unused cells out or empty or use spaces so it looks more nice.
+You can leave unused cells out or empty or use spaces so the number clusters look more like a complete matrix.
 
 Call the program with the path to the [CSV file](https://en.wikipedia.org/wiki/Comma-separated_values) described under Commandline Usage.
 
