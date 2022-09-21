@@ -1,10 +1,10 @@
 # Nonogram Solver
 
 [![license](https://img.shields.io/github/license/jonaheinke/nonogram_solver)](LICENSE)
-[![last commit](https://img.shields.io/github/last-commit/jonaheinke/nonogram_solver)](/commit)
-[![open issues](https://img.shields.io/github/issues/jonaheinke/nonogram_solver)](/issues)
+[![last commit](https://img.shields.io/github/last-commit/jonaheinke/nonogram_solver)](https://github.com/jonaheinke/nonogram_solver/commit)
+[![open issues](https://img.shields.io/github/issues/jonaheinke/nonogram_solver)](https://github.com/jonaheinke/nonogram_solver/issues)
 [![code size](https://img.shields.io/github/languages/code-size/jonaheinke/nonogram_solver)](#)
-[![example count](https://img.shields.io/github/directory-file-count/jonaheinke/nonogram_solver/example_files?label=example%20files&type=file&extension=csv)](/example_files)
+[![example count](https://img.shields.io/github/directory-file-count/jonaheinke/nonogram_solver/example_files?label=example%20files&type=file&extension=csv)](example_files/)
 [![used libraries](https://img.shields.io/badge/used%20libraries-numpy-013243)](#)
 
 This Python project is a **puzzle solver** for the popular japanese **Nonograms**. They are also known as Hanjie, Paint by Numbers, Picross, Griddlers and Pic-a-Pix. I recommend reading the corresponding [Wikipedia article on Nonograms](https://en.wikipedia.org/wiki/Nonogram). It explains very well how to solve them by hand.
