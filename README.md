@@ -18,8 +18,9 @@ There are plenty of examples in the `example_files` folder, hand-solved solution
 ### Commandline
 
 ```bash
+$ git clone https://github.com/jonaheinke/nonogram_solver.git
 $ pip install numpy
-$ python nonogram_solver.py example_files/example1.csv
+$ python nonogram_solver.py example_files/example2.csv
 ```
 
 ### File input
