@@ -28,6 +28,7 @@ class NonogramSolver:
 		dimensions (tuple): The dimensions of the nonogram puzzle.
 		board (np.ndarray): The nonogram puzzle (0 = empty, 1 == cross, 2 == box).
 	"""
+	MAX_DEPTH = 4
 
 	def __init__(self, from_board_or_filename: Union[Nonogram, str, bytes, os.PathLike]):
 		"""Reads the input file and initializes the nonogram puzzle."""
@@ -37,7 +38,7 @@ class NonogramSolver:
 			self.nonogram = from_board_or_filename
 		else:
 			self.nonogram = Nonogram(from_board_or_filename)
-		self.nonogram.assert_correctness()
+		#self.nonogram.assert_correctness()
 	
 
 	
@@ -52,7 +53,7 @@ class NonogramSolver:
 		return 0 if len(numbers) == 0 else np.sum(numbers) + len(numbers) - 1
 	
 	@staticmethod
-	def rle(array: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+	def __rle(array: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 		#from: https://stackoverflow.com/a/69693227
 		n = len(array)
 		if n == 0:
@@ -65,36 +66,45 @@ class NonogramSolver:
 		return values, lengths
 	
 	@staticmethod
-	def __check_line_validity(numbers: list[int], line: np.ndarray) -> bool:
-		#Checks if the numbers fit between the start and end index in the line.
-		if NonogramSolver.__min_number_width(numbers) > line.size:
-			return False
-		lengths = [l for v, l in zip(*NonogramSolver.rle(line)) if v == BOX]
-
+	def __rle_box_lengths(array: np.ndarray) -> list[int]:
+		return [l for v, l in zip(*NonogramSolver.__rle(array)) if v == BOX]
 	
 	@staticmethod
 	def __check_line_solvability(numbers: list[int], line: np.ndarray) -> bool:
-		raise NotImplementedError
-	
-	@staticmethod
-	def __check_line_completeness(numbers: list[int], line: np.ndarray) -> bool:
-		return np.all(line != EMPTY) and NonogramSolver.__check_line_validity(numbers, line)
-	
-	@staticmethod
-	def __get_permutations(numbers: list[int], line: np.ndarray, start_at: int = 0) -> Generator[np.ndarray, None, None]:
 		if not numbers:
+			return True
+		if line.size == 0 or NonogramSolver.__min_number_width(numbers) > line.size:
+			return False
+		lengths = NonogramSolver.__rle_box_lengths(line)
+		if not lengths:
+			return True
+		if len(lengths) > len(numbers):
+			return False
+		i = 0
+		for number in numbers:
+			if lengths[i] <= number:
+				i += 1
+			if i == len(lengths):
+				return True
+		return True
+	
+	@staticmethod
+	def __check_board_solved(nonogram: Nonogram) -> bool:
+		if np.any(nonogram.board == EMPTY):
+			return False
+		
+	
+	@staticmethod
+	def __get_permutations(numbers: list[int], line: np.ndarray, numbers_start_at: int = 0, line_start_at: int = 0) -> Generator[np.ndarray, None, None]:
+		if numbers_start_at >= len(numbers):
 			yield line
 			return
-		number = numbers[0]
-		"""
-		print("execute __get_permutations")
-		print("\tcurrent number:", number)
-		print("\tline:", line)"""
+		number = numbers[numbers_start_at]
 		#try to position the block at every available position
-		for i in range(start_at, len(line) - number + 1):
+		for i in range(line_start_at, len(line) - number + 1):
 			#abort if a block got jumped over
-			if np.any(line[start_at:i] == BOX):
-				return
+			if np.any(line[line_start_at:i] == BOX):
+				return #TODO: Is returning here correct?
 			#check if the spot is available
 			if np.all(line[i:i+number] != CROSS):
 				#check if the spot is followed by a box
@@ -102,13 +112,16 @@ class NonogramSolver:
 					continue
 				temp = line.copy()
 				temp[i:i+number] = BOX
+
+				if not NonogramSolver.__check_line_solvability(numbers, temp):
+					continue
 				if i > 0:
 					#temp[start_at:i] = CROSS
 					temp[i-1] = CROSS
 				if i + number < len(line) and temp[i+number] != BOX:
 					temp[i+number] = CROSS
 				
-				yield from NonogramSolver.__get_permutations(numbers[1:], temp, i + number)
+				yield from NonogramSolver.__get_permutations(numbers, temp, numbers_start_at + 1, i + number)
 	
 	@staticmethod
 	def get_permutations(*args):
@@ -118,22 +131,12 @@ class NonogramSolver:
 	@staticmethod
 	def __solve_line(numbers: list[int], line: np.ndarray) -> set[int]:
 		"""Solves a single row or column of the nonogram puzzle."""
-		#TODO FIXME: this adds the index i for every cell to the set, so the logic doesn't quite check out
 		permutations = list(NonogramSolver.__get_permutations(numbers, line))
 		if not permutations:
 			return set()
 		transposed_stack = np.column_stack(permutations)
 		changed_indeces = set()
 		for i, cell_permutations in enumerate(transposed_stack):
-			"""
-			cells_are_boxes = np.equal(cell_permutations == BOX)
-			if np.all(cells_are_boxes): #np.all(cell_permutations, BOX)
-				line[i] = BOX
-			elif np.any(cells_are_boxes): #np.any(cell_permutations == BOX)
-				line[i] = EMPTY
-			else:
-				line[i] = CROSS
-			"""
 			#TODO: integrate this function
 			#cell in all permutations:
 			#- all empty -> cross
@@ -151,6 +154,11 @@ class NonogramSolver:
 					line[i] = CROSS
 					changed_indeces.add(i)
 
+		#if all boxes are places, fill the rest with crosses
+		if NonogramSolver.__rle_box_lengths(line) == numbers:
+			indeces = (line == EMPTY).nonzero()[0]
+			line[line == EMPTY] = CROSS
+			changed_indeces.update(indeces)
 		return changed_indeces
 	
 	@staticmethod
@@ -159,23 +167,26 @@ class NonogramSolver:
 		row_queue    = set(range(len(nonogram.row_numbers)))
 		column_queue = set(range(len(nonogram.column_numbers)))
 		while not nonogram.is_solved():
+			time_update_callback() #self.__update_elapsed_time()
 			#print("row_queue:", row_queue)
 			#print("column_queue:", column_queue)
 			#if the queues are empty the puzzle is unsolvable with the permutation method
 			if not row_queue and not column_queue:
-				print("Well, this is awkward. The puzzle is not solvable.")
 				break
 			#try to solve every row that got updated (and is because of that in the row_queue)
 			for row in row_queue.copy():
-				time_update_callback() #self.__update_elapsed_time()
 				row_queue.remove(row)
+				if not NonogramSolver.__check_line_solvability(nonogram.row_numbers[row], nonogram.board[row]):
+					return False
 				changed_indeces = NonogramSolver.__solve_line(nonogram.row_numbers[row], nonogram.board[row])
+
 				column_queue.update(changed_indeces)
 				#print("added", changed_indeces, "to column_queue")
 			#try to solve every column that got updated (and is because of that in the column_queue)
 			for column in column_queue.copy():
-				time_update_callback() #self.__update_elapsed_time()
 				column_queue.remove(column)
+				if not NonogramSolver.__check_line_solvability(nonogram.column_numbers[column], nonogram.board[:, column]):
+					return False
 				changed_indeces = NonogramSolver.__solve_line(nonogram.column_numbers[column], nonogram.board[:, column])
 				row_queue.update(changed_indeces)
 				#print("added", changed_indeces, "to row_queue")
@@ -183,51 +194,45 @@ class NonogramSolver:
 	
 	@staticmethod
 	def __solve_disproof(nonogram: Nonogram, time_update_callback: Callable = lambda *_: None, depth: int = 1) -> bool:
-		#for every cell:
-		#	if it is empty, mark it is a box and try solving
-		for i, j in np.ndenumerate(nonogram.board):
-			time_update_callback()
-			if nonogram.board[i][j] == EMPTY:
-				temp = nonogram.copy()
-				temp.board[i][j] = BOX
-				NonogramSolver.__solve_permutation(temp, time_update_callback)
-				if temp.is_solved():
-					nonogram = temp
-					return True
-				elif depth > 1:
-					solved = NonogramSolver.__solve_disproof(temp, time_update_callback, depth - 1)
-					nonogram = temp
-					return solved
+		if depth == 0:
+			return False
+		for (i, j), value in np.ndenumerate(nonogram.board):
+			#print(f"Indeces: {i},{j}    ")
+			if value == EMPTY:
+				for target_value in (BOX, CROSS):
+					temp = nonogram.copy()
+					temp.board[i][j] = target_value
+					#if i == 4 and j == 0 and target_value == CROSS:
+					#	print("before:")
+					#	print(temp)
+					NonogramSolver.__solve_permutation(temp, time_update_callback)
+					#if i == 4 and j == 0 and target_value == CROSS:
+					#	print("after:")
+					#	print(temp)
+					#print("completed squares:", len((temp.board != EMPTY).nonzero()[0]), "     ")
+					if temp.is_solved():
+						nonogram = temp
+						#print("bro I found one")
+						#print(temp)
+						return True
+					if NonogramSolver.__solve_disproof(temp, time_update_callback, depth - 1):
+						nonogram = temp
+						#print("bro I found one too")
+						return True
+				temp.board[i][j] = EMPTY
 		return False
 
-	def solve(self, print_elapsed_time = False) -> bool:
+	def solve(self, print_elapsed_time = False, depth: int = 1) -> bool:
 		"""Solves the nonogram puzzle. Allows printing the elapsed time."""
 		self.__start_time = time.perf_counter_ns()
-		self.__update_elapsed_time()
-		self.__solve_permutation(self.nonogram, self.__update_elapsed_time)
-		self.__update_elapsed_time()
-		#self.__solve_disproof(self.nonogram, self.__update_elapsed_time, 1)
-		self.__update_elapsed_time(True)
+		if print_elapsed_time:
+			self.__solve_permutation(self.nonogram, self.__update_elapsed_time)
+			self.__solve_disproof(self.nonogram, self.__update_elapsed_time, min(depth, NonogramSolver.MAX_DEPTH))
+			self.__update_elapsed_time(True)
+		else:
+			self.__solve_permutation(self.nonogram)
+			self.__solve_disproof(self.nonogram, depth = min(depth, NonogramSolver.MAX_DEPTH))
 		return self.nonogram.is_solved()
-		if not self.nonogram.is_solved():
-			print("Calculating via disproof method...")
-			board: Nonogram = self.nonogram.copy()
-			board.assert_correctness()
-			for indeces, value in np.ndenumerate(board):
-				self.__update_elapsed_time()
-				if value == EMPTY:
-					for v in (BOX, CROSS):
-						board[indeces[0]][indeces[1]] = v
-						self.__solve_permutation(board, self.__update_elapsed_time)
-						if board.is_solved():
-							self.nonogram = board
-							break
-					else:
-						continue
-					break
-			else:
-				pass #unsolvable puzzle, not even trying out every empty cell comes to a solution
-		self.__update_elapsed_time(True)
 	
 	def __str__(self) -> str:
 		return str(self.nonogram)
@@ -235,50 +240,51 @@ class NonogramSolver:
 
 
 	# ------------------------------------------------------ OUTPUT ------------------------------------------------------ #
+	def __print_time(self, time: float, newline = True) -> str:
+		print(f"Time elapsed: {(time - self.__start_time) / 1e9:11.6f} seconds", end = "\r")
+		if newline:
+			print()
+
 	def __update_elapsed_time(self, final_update = False):
 		"""Updates the current elapsed time shown in the console."""
 		#if print_elapsed_time:
 		if final_update:
 			self.__end_time = time.perf_counter_ns()
-			print(f"Time elapsed: {(self.__end_time - self.__start_time) / 1e9:10.6f} seconds")
+			self.print_time()
 		else:
 			#If more than five seconds elapsed, show a message.
 			if not self.__waiting_message_shown and time.perf_counter_ns() - self.__start_time > 5e9:
 				self.__waiting_message_shown = True
 				print("Please be patient, solving nonograms is in fact an NP-complete problem. 😄")
-			print(f"Time elapsed: {(time.perf_counter_ns() - self.__start_time) / 1e9:10.6f} seconds", end = "\r")
+			self.__print_time(time.perf_counter_ns(), False)
 	
 	def print_time(self):
 		"""Prints the elapsed time."""
-		print(f"Time elapsed: {(self.__end_time - self.__start_time) / 1e9:.6f} seconds")
+		self.__print_time(self.__end_time)
 
 
 
 # -------------------------------------------------------------------------------------------------------------------- #
 #                                                         MAIN                                                         #
 # -------------------------------------------------------------------------------------------------------------------- #
-"""
-line = np.array([EMPTY] * 8)
-print(line)
-perm = list(NonogramSolver.get_permutations([2, 4], line))
-print()
-print("Result:")
-print(perm)
 
-exit()
-"""
 if __name__ == "__main__":
-	parser = argparse.ArgumentParser(description = "Process datasets with optional video overlay.")
+	parser = argparse.ArgumentParser(description = "Solves nonogram puzzles, even the really hard ones.")
 	parser.add_argument("dataset", help = "CSV file")
-	parser.add_argument("-t", "--time", dest = "time", action = "store_true", help = "prints the elapsed time")
+	parser.add_argument("-t", "--time",  dest = "time", action = "store_true", help = "prints the elapsed time")
+	parser.add_argument("-d", "--depth", dest = "depth", type = int, choices = range(NonogramSolver.MAX_DEPTH + 1), default = 1, help = "assumption depth")
 	args = parser.parse_args()
 
+	solved = False
 	try:
 		nonogram = NonogramSolver(args.dataset)
-		nonogram.solve(True)
+		solved = nonogram.solve(args.time, args.depth)
 	except KeyboardInterrupt:
 		print() #newline, otherwise elapsed time is overwritten
-		print("Unfinished nonogram:")
-	else:
+		solved = False
+	
+	if solved:
 		print("Solved nonogram:")
+	else:
+		print("Unfinished nonogram:")
 	print(nonogram)

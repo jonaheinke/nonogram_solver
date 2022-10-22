@@ -2,7 +2,7 @@
 #                                                        IMPORTS                                                       #
 # -------------------------------------------------------------------------------------------------------------------- #
 
-import os, re
+import os, re, copy
 from itertools import zip_longest
 from typing import Union
 
@@ -71,12 +71,8 @@ class Nonogram:
 			except ValueError:
 				print("Unknown characters found. Please check the file for validity.")
 				return
-		self.board = np.zeros((len(self.row_numbers), len(self.column_numbers)), np.ubyte)
-		#self.board = np.random.randint(0, 2, (10, 10), dtype = np.ubyte) #randomize board
-		#print("Test output:")
-		#print(self.column_numbers)
-		#print(self.row_numbers)
-		self.__correctly_read = self.board_valitity()
+			self.board = np.zeros((len(self.row_numbers), len(self.column_numbers)), np.ubyte)
+		#self.__correctly_read = self.board_valitity()
 	
 	def __repr__(self) -> str:
 		return "Nonogram Puzzle (%dx%d)".format(*self.board.shape)
@@ -97,7 +93,7 @@ class Nonogram:
 				if cell == BOX:
 					result += "\033[0;37;47m   " #white square
 				elif cell == CROSS:
-					result += "\033[0;37;40m X " #X
+					result += "\033[0;37;40m × " #X
 				else:
 					result += "\033[0;37;40m   " #black square
 			result += "\033[0;37;40m│\n" #color reset, right bar and newline
@@ -108,7 +104,14 @@ class Nonogram:
 		return isinstance(__o, Nonogram) and (self.board == __o.board).all() and self.row_numbers == __o.row_numbers and self.column_numbers == __o.column_numbers
 	
 	def copy(self):
-		return Nonogram(None, (self.board.shape))
+		temp = Nonogram(None, (self.board.shape))
+		temp.board = copy.deepcopy(self.board)
+		temp.row_numbers = copy.deepcopy(self.row_numbers)
+		#temp.row_numbers = self.row_numbers.copy()
+		temp.column_numbers = copy.deepcopy(self.column_numbers)
+		#temp.column_numbers = self.column_numbers.copy()
+		temp.__correctly_read = self.__correctly_read
+		return temp
 
 	@classmethod
 	def from_board():
