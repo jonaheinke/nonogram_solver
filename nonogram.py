@@ -79,8 +79,7 @@ class Nonogram:
 	
 	def __str__(self) -> str:
 		result = ""
-		longest_row_length = max(len(row) for row in self.row_numbers)
-		left_spacing = longest_row_length * 3
+		left_spacing = max(len(row) for row in self.row_numbers) * 3
 		for row in zip_longest(*self.column_numbers, fillvalue = " " * 3):
 			result += " " * (left_spacing + 1) + "".join(str(n).center(3) for n in row) + "\n"
 		result += " " * left_spacing + "┌" + "───"*self.board.shape[1] + "┐\n" #top bar
@@ -91,12 +90,12 @@ class Nonogram:
 			result += "".join(str(n).center(3) for n in row_numbers_row).rjust(left_spacing) + "│" #left bar
 			for cell in board_row:
 				if cell == BOX:
-					result += "\033[0;37;47m   " #white square
+					result += "\x1b[0;37;46m   " #cyan square
 				elif cell == CROSS:
-					result += "\033[0;37;40m × " #X
+					result += "\x1b[0;37;40m × " #X
 				else:
-					result += "\033[0;37;40m   " #black square
-			result += "\033[0;37;40m│\n" #color reset, right bar and newline
+					result += "\x1b[0;37;40m   " #black square
+			result += "\x1b[0;37;40m│\n" #color reset, right bar and newline
 		result += " " * left_spacing + "└" + "───"*self.board.shape[1] + "┘\n" #bottom bar
 		return result
 	
@@ -106,19 +105,14 @@ class Nonogram:
 	def copy(self):
 		temp = Nonogram(None, (self.board.shape))
 		temp.board = copy.deepcopy(self.board)
-		temp.row_numbers = copy.deepcopy(self.row_numbers)
+		#temp.row_numbers = copy.deepcopy(self.row_numbers)
 		#temp.row_numbers = self.row_numbers.copy()
-		temp.column_numbers = copy.deepcopy(self.column_numbers)
+		temp.row_numbers = self.row_numbers
+		#temp.column_numbers = copy.deepcopy(self.column_numbers)
 		#temp.column_numbers = self.column_numbers.copy()
+		temp.column_numbers = self.column_numbers
 		temp.__correctly_read = self.__correctly_read
 		return temp
-
-	@classmethod
-	def from_board():
-		pass
-
-	def import_board(self, board):
-		pass
 
 	def assert_correctness(self):
 		"""Prevents the program from running if the input file was not read correctly."""
@@ -138,9 +132,3 @@ class Nonogram:
 	
 	def is_solved(self) -> bool:
 		return np.all(self.board != EMPTY)
-	
-	def get_row(self, n: int) -> np.ndarray: #TODO: check type
-		return self.board[n]
-	
-	def get_column(self, n: int) -> np.ndarray: #TODO: check type
-		return self.board[:, n]
