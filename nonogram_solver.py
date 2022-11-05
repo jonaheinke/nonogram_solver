@@ -11,7 +11,7 @@ __all__ = ["NonogramSolver"]
 # -------------------------------------------------------------------------------------------------------------------- #
 
 import os, time, argparse, profile, pstats
-from multiprocessing import Pool
+from multiprocessing import Pool, Queue
 from typing import Union, Callable, Generator
 
 os.environ["NUMPY_EXPERIMENTAL_ARRAY_FUNCTION"] = "0" #implement_array_function takes much time (see profiler): https://stackoverflow.com/questions/61983372/is-built-in-method-numpy-core-multiarray-umath-implement-array-function-a-per
@@ -82,19 +82,23 @@ class NonogramSolver:
 		if not numbers:
 			return True
 		if line.size == 0 or NonogramSolver.__min_number_width(numbers) > line.size:
+			#print("min_number_width triggers false")
 			return False
 		lengths = rle_box_lengths(line)
 		if not lengths:
 			return True
-		if len(lengths) > len(numbers):
-			return False
 		i = 0
 		for number in numbers:
-			if lengths[i] <= number:
-				i += 1
-			if i == len(lengths):
-				return True
-		return True
+			remaining_space = number
+			while remaining_space > 0:
+				if lengths[i] <= number:
+					remaining_space -= lengths[i] + 1
+					i += 1
+				else:
+					break
+				if i == len(lengths):
+					return True
+		return False
 	
 	@staticmethod
 	def __check_board_solvability(nonogram: Nonogram) -> bool:
@@ -179,9 +183,7 @@ class NonogramSolver:
 		row_queue    = set(range(len(nonogram.row_numbers)))
 		column_queue = set(range(len(nonogram.column_numbers)))
 		while not nonogram.is_solved():
-			time_update_callback() #self.__update_elapsed_time()
-			#print("row_queue:", row_queue)
-			#print("column_queue:", column_queue)
+			time_update_callback()
 			#if the queues are empty the puzzle is unsolvable with the permutation method
 			if not row_queue and not column_queue:
 				break
@@ -191,9 +193,7 @@ class NonogramSolver:
 				if not NonogramSolver.__check_line_solvability(nonogram.row_numbers[row], nonogram.board[row]):
 					return False
 				changed_indeces = NonogramSolver.__solve_line(nonogram.row_numbers[row], nonogram.board[row])
-
 				column_queue.update(changed_indeces)
-				#print("added", changed_indeces, "to column_queue")
 			#try to solve every column that got updated (and is because of that in the column_queue)
 			for column in column_queue.copy():
 				column_queue.remove(column)
@@ -201,8 +201,14 @@ class NonogramSolver:
 					return False
 				changed_indeces = NonogramSolver.__solve_line(nonogram.column_numbers[column], nonogram.board[:, column])
 				row_queue.update(changed_indeces)
-				#print("added", changed_indeces, "to row_queue")
-			#time.sleep(1.0)
+
+	@staticmethod
+	def __solve_disproof_cell(idx: int, nonogram: Nonogram, time_update_callback: Callable = lambda *_: None, depth: int = 1) -> bool:
+		pass
+	#terminate complete pool
+	#pool.close()
+	#pool.terminate()
+	#pool.join()
 	
 	@staticmethod
 	def __solve_disproof(nonogram: Nonogram, time_update_callback: Callable = lambda *_: None, depth: int = 1) -> bool:
@@ -210,10 +216,10 @@ class NonogramSolver:
 			return nonogram.is_solved()
 		for (i, j), value in np.ndenumerate(nonogram.board):
 			if value == EMPTY:
-				#print(f"Indeces: {i},{j}    ")
+				#print(f"depth: {depth}, indeces: {i}-{j}".ljust(40))
 				contradiction = [False, False]
 				#try setting a box and a cross
-				for i, target_value in enumerate((BOX, CROSS)):
+				for k, target_value in enumerate((BOX, CROSS)):
 					#copy nonogram board, so that the original isn't overwritten
 					temp = nonogram.copy()
 					#set assumption
@@ -223,25 +229,32 @@ class NonogramSolver:
 					"""print("completed squares:", len((temp.board != EMPTY).nonzero()[0]), "     ")"""
 					#if the puzzle could be solved without further assumptions, the initial assumption was correct
 					if NonogramSolver.__check_board_solved(temp):
-						nonogram = temp
+						#nonogram = temp
+						nonogram.board = temp.board
 						return True
 					#otherwise if the puzzle is not solvable with the assumption, the assumption was wrong
 					if not NonogramSolver.__check_board_solvability(temp):
 						#found a contradiction
-						contradiction[i] = True
+						contradiction[k] = True
 						continue
 					#otherwise try to solve with further assumptions recursively
 					if NonogramSolver.__solve_disproof(temp, time_update_callback, depth - 1):
-						nonogram = temp
+						#nonogram = temp
+						nonogram.board = temp.board
 						return True
 				#if both assumptions were wrong, the puzzle is unsolvable at this point (in upper recursion depths it still might be solvable)
 				if contradiction[0] and contradiction[1]:
+					#print("both assumptions wrong".ljust(40))
 					return False
 				#otherwise the cell's value is forced
 				if contradiction[0] or contradiction[1]:
+					#print("forced value".ljust(40))
 					nonogram.board[i][j] = CROSS if contradiction[0] else BOX
-					return NonogramSolver.__solve_disproof(nonogram, time_update_callback, depth)
+					if NonogramSolver.__solve_disproof(nonogram, time_update_callback, depth):
+						return True
 				#else: no conclusive assumption could be made for this cell
+				#print("no conclusive assumption".ljust(40))
+		#print("default false".ljust(40))
 		return False
 
 	def solve(self, print_elapsed_time = False, depth: int = 1) -> bool:
@@ -253,7 +266,7 @@ class NonogramSolver:
 			self.__solve_disproof(self.nonogram, function_, min(depth, NonogramSolver.MAX_DEPTH))
 		except RecursionError:
 			print()
-			print("Maximum recursion depth reached.")
+			print("Maximum recursion depth reached."*5)
 			return False
 		if print_elapsed_time:
 			self.__update_elapsed_time(True)
@@ -266,9 +279,7 @@ class NonogramSolver:
 
 	# ------------------------------------------------------ OUTPUT ------------------------------------------------------ #
 	def __print_time(self, time: float, newline = True) -> str:
-		print(f"Time elapsed: {(time - self.__start_time) / 1e9:11.6f} seconds", end = "\r")
-		if newline:
-			print()
+		print(f"Time elapsed: {(time - self.__start_time) / 1e9:11.6f} seconds", end = "\r\n" if newline else "\r")
 
 	def __update_elapsed_time(self, final_update = False):
 		"""Updates the current elapsed time shown in the console."""
@@ -317,6 +328,7 @@ if __name__ == "__main__":
 	else:
 		print("Unfinished nonogram:")
 	print(nonogram)
+	print(NonogramSolver._NonogramSolver__check_board_solvability(nonogram.nonogram))
 
 	if args.profiler:
 		with open("profile.txt", "w") as f:
