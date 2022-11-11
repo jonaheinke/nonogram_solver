@@ -13,6 +13,11 @@ This program is superior to other nonogram solvers because it can solve way more
 
 There are plenty of examples in the `example_files` folder, hand-solved solutions and their transcriptions. Some of them are marked `hard` which cannot be solved with traditional methods.
 
+## Current stage of development
+
+It can currently solve any nonogram without assumptions. But that is not really useful, because you can solve those by hand.
+I don't know why but it can't solve nonograms with assumptions for the life of it.
+
 ## Usage
 
 ### Commandline

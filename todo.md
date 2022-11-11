@@ -1,0 +1,2 @@
+- phase out __check_line_solvability and __check_board_solvability or put the contents of the new for loop inside of __solve_permutation into __check_line_solvability
+- currently assumptions don't work at all

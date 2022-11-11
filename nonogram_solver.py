@@ -12,7 +12,8 @@ __all__ = ["NonogramSolver"]
 
 import os, time, argparse, profile, pstats
 from multiprocessing import Pool, Queue
-from typing import Union, Callable, Generator
+from typing import Union, Callable
+from collections.abc import Iterator
 
 os.environ["NUMPY_EXPERIMENTAL_ARRAY_FUNCTION"] = "0" #implement_array_function takes much time (see profiler): https://stackoverflow.com/questions/61983372/is-built-in-method-numpy-core-multiarray-umath-implement-array-function-a-per
 import numpy as np
@@ -39,6 +40,16 @@ def rle(array: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 def rle_box_lengths(array: np.ndarray) -> list[int]:
 	return [l for v, l in zip(*rle(array)) if v == BOX]
+
+def rle_between_crosses(array: np.ndarray) -> list[int]:
+	result = []
+	for value in zip(array + [None], [None] + array):
+		if value == CROSS:
+			result.append(0)
+		elif i == 0 or array[i - 1] == CROSS:
+			result.append(1)
+		else:
+			result[-1] += 1
 
 
 
@@ -70,7 +81,7 @@ class NonogramSolver:
 	# ---------------------------------------------------- PROCESSING ---------------------------------------------------- #
 	@staticmethod
 	def __min_number_width(numbers: Union[np.ndarray, list, tuple]) -> int:
-		"""Calculates the minimum required width of an array of numbers on a hypothetical puzzle board.\n
+		"""Calculates the minimum required length of an array of numbers on a hypothetical puzzle board.\n
 		Examples:
 		- [6] -> 6
 		- [1, 4] -> 6
@@ -82,8 +93,8 @@ class NonogramSolver:
 		if not numbers:
 			return True
 		if line.size == 0 or NonogramSolver.__min_number_width(numbers) > line.size:
-			#print("min_number_width triggers false")
 			return False
+		"""
 		lengths = rle_box_lengths(line)
 		if not lengths:
 			return True
@@ -91,17 +102,36 @@ class NonogramSolver:
 		for number in numbers:
 			remaining_space = number
 			while remaining_space > 0:
+				if i == len(lengths):
+					return True
 				if lengths[i] <= number:
 					remaining_space -= lengths[i] + 1
 					i += 1
 				else:
 					break
-				if i == len(lengths):
-					return True
 		return False
+		"""
+		def idk(numbers: list[int], line: np.ndarray) -> bool:
+			i = 0
+			for number in numbers:
+				position = NonogramSolver.__get_first_possible_position(number, line, i)
+				if position == -1:
+					return False
+				i = position + number + 1
+			return True
+		
+		#print("Vorwärts: ", idk(numbers, line))
+		#print("Rückwärts:", idk(reversed(numbers), line[::-1]))
+		return idk(numbers, line) and idk(reversed(numbers), line[::-1])
+		#try fitting from reverse is necessary because some of the following nonassigned boxgroups can prevent the fitting of the last number(s)
+		#(1, 2), [ ×  ×▯×]
 	
 	@staticmethod
 	def __check_board_solvability(nonogram: Nonogram) -> bool:
+		#print("Row solvability:")
+		#print([NonogramSolver.__check_line_solvability(numbers, line) for numbers, line in zip(nonogram.row_numbers, nonogram.board)])
+		#print("Column solvability:")
+		#print([NonogramSolver.__check_line_solvability(numbers, line) for numbers, line in zip(nonogram.column_numbers, nonogram.board.T)])
 		return all(NonogramSolver.__check_line_solvability(numbers, line) for numbers, line in zip(nonogram.row_numbers, nonogram.board)) and all(NonogramSolver.__check_line_solvability(numbers, line) for numbers, line in zip(nonogram.column_numbers, nonogram.board.T))
 	
 	@staticmethod
@@ -109,9 +139,51 @@ class NonogramSolver:
 		if np.any(nonogram.board == EMPTY):
 			return False
 		return NonogramSolver.__check_board_solvability(nonogram)
+	
+	@staticmethod
+	def __find_next_box(line: np.ndarray, line_start_at: int = 0) -> int:
+		"""Finds the next box in a line."""
+		try:
+			position = np.where(line[line_start_at:] == BOX)[0][0] + line_start_at
+		except IndexError:
+			return len(line) + 1
+		return position
 
 	@staticmethod
-	def __get_permutations(numbers: list[int], line: np.ndarray, numbers_start_at: int = 0, line_start_at: int = 0) -> Generator[np.ndarray, None, None]:
+	def __get_all_possible_positions(number: int, line: np.ndarray, line_start_at: int = 0) -> Iterator[int]:
+		condition = lambda i: np.all(line[i:i+number] != CROSS) and not (i + number < len(line) and line[i+number] == BOX) and not (i > 0 and line[i-1] == BOX)
+		indecies = range(line_start_at, min(len(line) - number, NonogramSolver.__find_next_box(line, line_start_at)) + 1)
+		yield from filter(condition, indecies)
+
+	@staticmethod
+	def __get_first_possible_position(number: int, line: np.ndarray, line_start_at: int = 0) -> int:
+		"""Returns the first possible position of a number inside a (possibly filled) line. Returns -1 if no position is available.\n
+		Examples:
+		- 1, '× ×▯' -> 1
+		- 2, ' ×▯  ×' -> 2"""
+		return next(NonogramSolver.__get_all_possible_positions(number, line, line_start_at), -1)
+
+	@staticmethod
+	def __get_permutations(numbers: list[int], line: np.ndarray, numbers_start_at: int = 0, line_start_at: int = 0) -> Iterator[np.ndarray]:
+		if numbers_start_at >= len(numbers):
+			yield line
+			return
+		number = numbers[numbers_start_at]
+		#try to position the block at every available position
+		for i in NonogramSolver.__get_all_possible_positions(number, line, line_start_at):
+			temp = line.copy()
+			temp[i:i+number] = BOX
+			if i > 0:
+				temp[line_start_at:i] = CROSS
+			if i + number < len(line) and temp[i+number] != BOX:
+				temp[i+number] = CROSS	
+			#if not NonogramSolver.__check_line_solvability(numbers, temp):
+			#	continue
+			yield from NonogramSolver.__get_permutations(numbers, temp, numbers_start_at + 1, i + number + 1)
+
+	"""
+	@staticmethod
+	def __get_permutations(numbers: list[int], line: np.ndarray, numbers_start_at: int = 0, line_start_at: int = 0) -> Iterator[np.ndarray]:
 		if numbers_start_at >= len(numbers):
 			yield line
 			return
@@ -138,11 +210,7 @@ class NonogramSolver:
 					temp[i+number] = CROSS
 				
 				yield from NonogramSolver.__get_permutations(numbers, temp, numbers_start_at + 1, i + number)
-	
-	@staticmethod
-	def get_permutations(*args):
-		#TODO: implement sanity checks
-		return NonogramSolver.__get_permutations(*args)
+	"""
 
 	@staticmethod
 	def __solve_line(numbers: list[int], line: np.ndarray) -> set[int]:
@@ -170,7 +238,7 @@ class NonogramSolver:
 					line[i] = CROSS
 					changed_indeces.add(i)
 
-		#if all boxes are places, fill the rest with crosses
+		#if all boxes are placed, fill the rest with crosses
 		if rle_box_lengths(line) == numbers:
 			indeces = (line == EMPTY).nonzero()[0]
 			line[line == EMPTY] = CROSS
@@ -190,16 +258,20 @@ class NonogramSolver:
 			#try to solve every row that got updated (and is because of that in the row_queue)
 			for row in row_queue.copy():
 				row_queue.remove(row)
-				if not NonogramSolver.__check_line_solvability(nonogram.row_numbers[row], nonogram.board[row]):
-					return False
 				changed_indeces = NonogramSolver.__solve_line(nonogram.row_numbers[row], nonogram.board[row])
+				for index in changed_indeces:
+					if not list(next(NonogramSolver.__get_permutations(nonogram.column_numbers[index], nonogram.board[:, index]), [])):
+						return False
 				column_queue.update(changed_indeces)
 			#try to solve every column that got updated (and is because of that in the column_queue)
 			for column in column_queue.copy():
 				column_queue.remove(column)
-				if not NonogramSolver.__check_line_solvability(nonogram.column_numbers[column], nonogram.board[:, column]):
-					return False
+				#if not NonogramSolver.__check_line_solvability(nonogram.column_numbers[column], nonogram.board[:, column]):
+				#	return False
 				changed_indeces = NonogramSolver.__solve_line(nonogram.column_numbers[column], nonogram.board[:, column])
+				for index in changed_indeces:
+					if not list(next(NonogramSolver.__get_permutations(nonogram.row_numbers[index], nonogram.board[index]), [])):
+						return False
 				row_queue.update(changed_indeces)
 
 	@staticmethod
@@ -250,6 +322,9 @@ class NonogramSolver:
 				if contradiction[0] or contradiction[1]:
 					#print("forced value".ljust(40))
 					nonogram.board[i][j] = CROSS if contradiction[0] else BOX
+					if NonogramSolver.__solve_permutation(nonogram, time_update_callback):
+						#after finding an assumption that works, it was solvable without further assumptions
+						return True
 					if NonogramSolver.__solve_disproof(nonogram, time_update_callback, depth):
 						return True
 				#else: no conclusive assumption could be made for this cell
@@ -328,7 +403,6 @@ if __name__ == "__main__":
 	else:
 		print("Unfinished nonogram:")
 	print(nonogram)
-	print(NonogramSolver._NonogramSolver__check_board_solvability(nonogram.nonogram))
 
 	if args.profiler:
 		with open("profile.txt", "w") as f:
